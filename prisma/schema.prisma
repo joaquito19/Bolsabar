@@ -8,35 +8,39 @@ datasource db {
 }
 
 model Venue {
-  id         String  @id @default(cuid())
-  name       String
-  currency   String  @default("UYU")
-  timezone   String  @default("America/Montevideo")
-  isActive   Boolean @default(true)
-  tables     Table[]
-  drinks     Drink[]
-  orders     Order[]
-  config     Config?
-  happyRules HappyHourRule[]
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String           @id @default(cuid())
+  name        String
+  currency    String           @default("UYU")
+  timezone    String           @default("America/Montevideo")
+  isActive    Boolean          @default(true)
+
+  tables      Table[]          @relation("VenueToTables")
+  drinks      Drink[]          @relation("VenueToDrinks")
+  orders      Order[]          @relation("VenueToOrders")
+  config      Config?          @relation("VenueToConfig")
+  happyRules  HappyHourRule[]  @relation("VenueToHappyRules")
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model Table {
   id        String  @id @default(cuid())
   venueId   String
-  venue     Venue   @relation(fields: [venueId], references: [id])
+  venue     Venue   @relation("VenueToTables", fields: [venueId], references: [id])
   number    Int
   alias     String?
+  orders    Order[] @relation("TableToOrders")   // ← contraparte de Order.table
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@unique([venueId, number])
 }
 
 model Drink {
   id         String   @id @default(cuid())
   venueId    String
-  venue      Venue    @relation(fields: [venueId], references: [id])
+  venue      Venue    @relation("VenueToDrinks", fields: [venueId], references: [id])
   name       String
   code       String
   basePrice  Decimal  @db.Decimal(10,2)
@@ -46,19 +50,23 @@ model Drink {
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  prices     PriceHistory[]
+
+  prices     PriceHistory[] @relation("DrinkToPrices")
+  orders     Order[]        @relation("DrinkToOrders")  // ← contraparte de Order.drink
+
   @@index([venueId, isActive])
 }
 
 model PriceHistory {
   id        String   @id @default(cuid())
   drinkId   String
-  drink     Drink    @relation(fields: [drinkId], references: [id])
+  drink     Drink    @relation("DrinkToPrices", fields: [drinkId], references: [id])
   venueId   String
   ts        DateTime @default(now())
   price     Decimal  @db.Decimal(10,2)
   changePct Float
   reason    String?
+
   @@index([drinkId, ts])
 }
 
@@ -84,12 +92,16 @@ enum OrderSource {
 
 model Order {
   id           String        @id @default(cuid())
+
   venueId      String
-  venue        Venue         @relation(fields: [venueId], references: [id])
+  venue        Venue         @relation("VenueToOrders", fields: [venueId], references: [id])
+
   tableId      String?
-  table        Table?        @relation(fields: [tableId], references: [id])
+  table        Table?        @relation("TableToOrders", fields: [tableId], references: [id])
+
   drinkId      String
-  drink        Drink         @relation(fields: [drinkId], references: [id])
+  drink        Drink         @relation("DrinkToOrders", fields: [drinkId], references: [id])
+
   quantity     Int           @default(1)
   priceAtOrder Decimal       @db.Decimal(10,2)
   quoteId      String?
@@ -104,7 +116,7 @@ model Order {
 model Config {
   id           String  @id @default(cuid())
   venueId      String  @unique
-  venue        Venue   @relation(fields: [venueId], references: [id])
+  venue        Venue   @relation("VenueToConfig", fields: [venueId], references: [id])
   priceTickSec Int     @default(90)
   quoteTtlSec  Int     @default(60)
   currency     String  @default("UYU")
@@ -115,7 +127,7 @@ model Config {
 model HappyHourRule {
   id           String  @id @default(cuid())
   venueId      String
-  venue        Venue   @relation(fields: [venueId], references: [id])
+  venue        Venue   @relation("VenueToHappyRules", fields: [venueId], references: [id])
   daysOfWeek   String  // CSV: MON,TUE,WED,THU,FRI,SAT,SUN
   startLocal   String  // "HH:mm"
   durationMin  Int     // minutos
@@ -126,3 +138,4 @@ model HappyHourRule {
 
   @@index([venueId, active])
 }
+
